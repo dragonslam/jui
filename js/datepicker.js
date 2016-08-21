@@ -245,6 +245,18 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             return { objs: objs, nums: nums };
         }
 
+        function checkDate(y, m, d) {
+            if(minDate) {
+                var minY = minDate.getFullYear(), minM = minDate.getMonth() + 1, minD = minDate.getDate();
+                if (y < minY || (y >= minY && m < minM)) return [minY, minM, minD];
+            }
+            if(maxDate) {
+                var maxY = maxDate.getFullYear(),maxM = maxDate.getMonth() + 1, maxD = maxDate.getDate()
+                if (y > maxY || (y <= maxY && m > maxM)) return [maxY, maxM, maxD];
+            }
+            return [y, m, d];
+        }
+
         this.init = function() {
             var opts = this.options;
 
@@ -262,7 +274,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
                 }
 
                 // 최소 날짜와 최대 날짜가 서로 교차하는 경우
-                if(maxDate < minDate) {
+                if(minDate && maxDate && maxDate < minDate) {
                     minDate = null;
                     maxDate = null;
                 }
@@ -386,6 +398,13 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
         	}
 
             if(opts.type == "daily") {
+                // 최소일과 최대일이 교차하는 경우
+                if(minDate || maxDate) {
+                    var checkedDate = checkDate(y, m, d);
+                    this.page(checkedDate[0], checkedDate[1]);
+                	this.addTrigger(items[checkedDate[2]], "click");
+                }
+
             	this.page(y, m);
             	this.addTrigger(items[d], "click");
             } else if(opts.type == "monthly") {
@@ -437,6 +456,28 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
         this.getFormat = function(format) {
             return _.dateFormat(selDate, (typeof(format) == "string") ? format : this.options.format);
         }
+
+        /**
+         * @method reload
+         * Reloads the datepicker
+         */
+        this.reload = function() {
+            var opts = this.options;
+            minDate = (_.typeCheck("date", opts.minDate)) ? opts.minDate : null;
+            maxDate = (_.typeCheck("date", opts.maxDate)) ? opts.maxDate : null;
+
+            if(opts.type == "daily") {
+                // 기본 날짜가 최소 날짜나 최대 날짜보다 작거나 큰 경우
+                if(opts.date < minDate) {
+                    opts.date = minDate;
+                } else if(opts.date < minDate) {
+                    opts.date = maxDate;
+                }
+            }
+
+            this.select();
+            this.emit("reload");
+        }
     }
 
     UI.setup = function() {
@@ -474,13 +515,13 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             animate: false,
 
             /**
-             * @cfg {Date} [date="null"]
+             * @cfg {Date} [minDate="null"]
              * Selects a specific minimum date
              */
             minDate: null,
 
             /**
-             * @cfg {Date} [date="null"]
+             * @cfg {Date} [maxDate="null"]
              * Selects a specific maximum date
              */
             maxDate: null

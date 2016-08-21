@@ -266,7 +266,7 @@ jui.defineUI("ui.combo", [ "jquery", "util.base" ], function($, _) {
 	}
 	
 	$(function() { 
-		$("body").on("click", function(e) {
+		document.addEventListener("click", function(e) {
 			hideAll();
 		});
 	});
@@ -294,8 +294,8 @@ jui.defineUI("ui.combo", [ "jquery", "util.base" ], function($, _) {
 				var elem = getElement(this),
 					value = $(elem).attr("value"),
 					text = $(elem).text();
-				
-				if(!value) { 
+
+				if(!value) {
 					value = text;
 					$(elem).attr("value", value);
 				}
@@ -413,6 +413,17 @@ jui.defineUI("ui.combo", [ "jquery", "util.base" ], function($, _) {
 			});
 		}
 
+		function getMaxListWidth() {
+			var maxValue = 0;
+
+			ui_list["drop"].children("li").each(function(i) {
+				var elem = getElement(this);
+				maxValue = Math.max(maxValue, $(elem).outerWidth());
+			});
+
+			return maxValue;
+		}
+
 		this.init = function() {
 			var self = this, opts = this.options;
 			
@@ -429,14 +440,19 @@ jui.defineUI("ui.combo", [ "jquery", "util.base" ], function($, _) {
 			if(opts.width > 0) {
 				$combo_text.outerWidth(opts.width - $combo_toggle.outerWidth() + 1);
 				$combo_text.css({
-					"overflow": "hidden",
+					"overflow-x": "hidden",
+					"overflow-y": "hidden",
 					"white-space": "nowrap"
 				});
 			}
 			
 			// Height
 			if(opts.height > 0) {
-				$combo_drop.css({ "maxHeight": opts.height, "overflow": "auto" });
+				$combo_drop.css({
+					"overflow-x": "hidden",
+					"overflow-y": "auto",
+					"max-height": opts.height
+				});
 			}
 
 			// Show
@@ -552,6 +568,14 @@ jui.defineUI("ui.combo", [ "jquery", "util.base" ], function($, _) {
 				ui_list["drop"].slideDown(100);
 			}
 
+			if(this.options.flex) {
+				var maxWidth = getMaxListWidth();
+
+				if(maxWidth > ui_list["drop"].outerWidth()) {
+					ui_list["drop"].outerWidth(getMaxListWidth() + 50);
+				}
+			}
+
 			this.emit("open", e);
 			this.type = "open";
 		}
@@ -625,7 +649,13 @@ jui.defineUI("ui.combo", [ "jquery", "util.base" ], function($, _) {
              * @cfg {"top"/"bottom"} [position="bottom"]
              * It is possible to determine an initial selection button with a specified value
              */
-			position: "bottom"
+			position: "bottom",
+
+			/**
+			 * @cfg {Boolean} [flex=true]
+			 * Drop-down menu is varied by changing the width function
+			 */
+			flex: true
         }
     }
 
@@ -679,6 +709,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
     	var year = null, month = null, date = null,
             selDate = null, items = {}; // 헌재 페이지의 요소 엘리먼트 캐싱
         var $head = null, $body = null;
+        var minDate = null, maxDate = null;
 
 
         function setCalendarEvent(self) {
@@ -690,7 +721,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
                 self.next(e);
             });
         }
-        
+
         function setCalendarDate(self, no) {
         	var opts = self.options;
 
@@ -712,7 +743,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
         function getCalendarDate(self) {
         	var opts = self.options,
         		tmpDate = null;
-        	
+
         	if(opts.type == "daily") {
         		var m = (month < 10) ? "0" + month : month;
         		tmpDate = new Date(year + "/" + m + "/01");
@@ -729,7 +760,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             var opts = self.options,
                 resHtml = [],
                 tmpItems = [];
-            
+
             // 활성화 날짜 캐시 초기화
             items = {};
 
@@ -766,11 +797,11 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
 
                     $body.find("td").removeClass("active");
                     $(this).addClass("active");
-                    
+
                     setCalendarDate(self, obj.objs[i].no);
                     self.emit("select", [ self.getFormat(), e ]);
                 });
-                
+
                 if(obj.objs[i].type != "none") {
                 	items[obj.objs[i].no] = this;
                 }
@@ -795,18 +826,28 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             }
         }
 
-        function getDateList(y, m) {
+        function getDateList(self, y, m) {
             var objs = [],
                 nums = [],
                 no = 1;
 
             var d = new Date(),
                 start = new Date(y + "-" + ((m < 10) ? "0" + m : m)).getDay(),
-                ldate = getLastDate(y, m);
+                ldate = getLastDate(y, m), sdate = 0;
 
             var prevYear = (m == 1) ? y - 1 : y,
                 prevMonth = (m == 1) ? 12 : m - 1,
                 prevLastDay = getLastDate(prevYear, prevMonth);
+
+            // 최소 날짜로 시작일 설정
+            if(minDate && minDate.getFullYear() == y && minDate.getMonth() + 1 == m) {
+                sdate = minDate.getDate();
+            }
+
+            // 최대 날짜로 종료일 설정
+            if(maxDate && maxDate.getFullYear() == y && maxDate.getMonth() + 1 == m) {
+                ldate = maxDate.getDate();
+            }
 
             for(var i = 0; i < start; i++) {
                 nums[i] = (prevLastDay - start) + (i + 1);
@@ -814,7 +855,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             }
 
             for(var i = start; i < 42; i++) {
-                if(no <= ldate) {
+                if(sdate <= no && no <= ldate) {
                     var type = "";
 
                     if(d.getMonth() + 1 == m && d.getDate() == no) {
@@ -893,15 +934,46 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             return { objs: objs, nums: nums };
         }
 
+        function checkDate(y, m, d) {
+            if(minDate) {
+                var minY = minDate.getFullYear(), minM = minDate.getMonth() + 1, minD = minDate.getDate();
+                if (y < minY || (y >= minY && m < minM)) return [minY, minM, minD];
+            }
+            if(maxDate) {
+                var maxY = maxDate.getFullYear(),maxM = maxDate.getMonth() + 1, maxD = maxDate.getDate()
+                if (y > maxY || (y <= maxY && m > maxM)) return [maxY, maxM, maxD];
+            }
+            return [y, m, d];
+        }
+
         this.init = function() {
+            var opts = this.options;
+
             $head = $(this.root).children(".head");
             $body = $(this.root).children(".body");
+            minDate = (_.typeCheck("date", opts.minDate)) ? opts.minDate : null;
+            maxDate = (_.typeCheck("date", opts.maxDate)) ? opts.maxDate : null;
+
+            if(opts.type == "daily") {
+                // 기본 날짜가 최소 날짜나 최대 날짜보다 작거나 큰 경우
+                if(opts.date < minDate) {
+                    opts.date = minDate;
+                } else if(opts.date < minDate) {
+                    opts.date = maxDate;
+                }
+
+                // 최소 날짜와 최대 날짜가 서로 교차하는 경우
+                if(minDate && maxDate && maxDate < minDate) {
+                    minDate = null;
+                    maxDate = null;
+                }
+            }
 
             // 이벤트 정의
             setCalendarEvent(this);
 
             // 기본 날짜 설정
-            this.select(this.options.date);
+            this.select(opts.date);
         }
 
         /**
@@ -918,12 +990,12 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             if(opts.type == "daily") {
                 year = y;
                 month = m;
-                
+
                 $body.find("tr:not(:first-child)").remove();
-                $body.append(getCalendarHtml(this, getDateList(year, month)));
+                $body.append(getCalendarHtml(this, getDateList(this, year, month)));
             } else if(opts.type == "monthly") {
                 year = y;
-                
+
                 $body.find("tr").remove();
                 $body.append(getCalendarHtml(this, getMonthList(year)));
             } else if(opts.type == "yearly") {
@@ -932,7 +1004,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
                 $body.find("tr").remove();
                 $body.append(getCalendarHtml(this, getYearList(year)));
             }
-            
+
             $head.children(".title").html(_.dateFormat(getCalendarDate(this), opts.titleFormat));
         }
 
@@ -947,14 +1019,18 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             if(opts.type == "daily") {
                 var y = (month == 1) ? year - 1 : year,
                     m = (month == 1) ? 12 : month - 1;
-                
+
+                if(minDate && minDate.getFullYear() == year && minDate.getMonth() + 1 == month) {
+                    return;
+                }
+
                 this.page(y, m);
             } else if(opts.type == "monthly") {
                 this.page(year - 1);
             } else if(opts.type == "yearly") {
                 this.page(year - 12);
             }
-            
+
             this.emit("prev", [ e ]);
         }
 
@@ -969,6 +1045,10 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
             if(opts.type == "daily") {
                 var y = (month == 12) ? year + 1 : year,
                     m = (month == 12) ? 1 : month + 1;
+
+                if(maxDate && maxDate.getFullYear() == year && maxDate.getMonth() + 1 == month) {
+                    return;
+                }
 
                 this.page(y, m);
             } else if(opts.type == "monthly") {
@@ -1007,6 +1087,13 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
         	}
 
             if(opts.type == "daily") {
+                // 최소일과 최대일이 교차하는 경우
+                if(minDate || maxDate) {
+                    var checkedDate = checkDate(y, m, d);
+                    this.page(checkedDate[0], checkedDate[1]);
+                	this.addTrigger(items[checkedDate[2]], "click");
+                }
+
             	this.page(y, m);
             	this.addTrigger(items[d], "click");
             } else if(opts.type == "monthly") {
@@ -1058,6 +1145,28 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
         this.getFormat = function(format) {
             return _.dateFormat(selDate, (typeof(format) == "string") ? format : this.options.format);
         }
+
+        /**
+         * @method reload
+         * Reloads the datepicker
+         */
+        this.reload = function() {
+            var opts = this.options;
+            minDate = (_.typeCheck("date", opts.minDate)) ? opts.minDate : null;
+            maxDate = (_.typeCheck("date", opts.maxDate)) ? opts.maxDate : null;
+
+            if(opts.type == "daily") {
+                // 기본 날짜가 최소 날짜나 최대 날짜보다 작거나 큰 경우
+                if(opts.date < minDate) {
+                    opts.date = minDate;
+                } else if(opts.date < minDate) {
+                    opts.date = maxDate;
+                }
+            }
+
+            this.select();
+            this.emit("reload");
+        }
     }
 
     UI.setup = function() {
@@ -1092,7 +1201,19 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
              * @cfg {Boolean} [animate=false]
              * @deprecated
              */
-            animate: false
+            animate: false,
+
+            /**
+             * @cfg {Date} [minDate="null"]
+             * Selects a specific minimum date
+             */
+            minDate: null,
+
+            /**
+             * @cfg {Date} [maxDate="null"]
+             * Selects a specific maximum date
+             */
+            maxDate: null
         };
     }
 
@@ -1120,6 +1241,7 @@ jui.defineUI("ui.datepicker", [ "jquery", "util.base" ], function($, _) {
 
     return UI;
 });
+
 jui.defineUI("ui.colorpicker", [ "jquery", "util.base", "util.color" ], function($, _, color) {
 
     /**
@@ -1528,7 +1650,7 @@ jui.defineUI("ui.colorpicker", [ "jquery", "util.base", "util.color" ], function
 
                 initColor(color.format(value, "hex"));
             } else if(typeof(value) == "string") {
-                if(value.length != 7 || value.charAt(0) != "#")
+                if(value.charAt(0) != "#")
                     return;
 
                 initColor(value);
@@ -1584,16 +1706,16 @@ jui.defineUI("ui.dropdown", [ "jquery" ], function($) {
 		return null;
 	}
 	
-	$(function() { 
-		$("body").on("click", function(e) {
+	$(function() {
+		document.addEventListener("click", function(e) {
 			var tn = e.target.tagName;
 			
 			if(tn != "LI" && tn != "INPUT" && tn != "A" && tn != "BUTTON" && tn != "I") {
 				hideAll();
 			}
 		});
-		
-		$(window).on("keydown", function(e) {
+
+		window.addEventListener("keydown", function(e) {
 			var dd = getDropdown();
 			
 			if(dd != null) {
@@ -2710,6 +2832,11 @@ jui.defineUI("ui.tooltip", [ "jquery" ], function($) {
          */
         this.update = function(newTitle) {
             title = newTitle;
+
+            // TODO: 특정 클래스의 마크업에 한정하는거라 차후에 개선해야함
+            if($tooltip != null) {
+                $tooltip.find(".message").html(title);
+            }
         }
 	}
 
@@ -4252,7 +4379,7 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 		function showMenu(self, elem) {
 			var pos = $(elem).offset();
 			
-			$(elem).parent().addClass("menu-keep");
+			$(elem).addClass("checked");
 			ui_menu.show(pos.left, pos.top + $(self.root).height());
 		}
 		
@@ -4260,7 +4387,7 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			var $list = $(self.root).children("li"),
 				$menuTab = $list.eq(menuIndex);
 			
-			$menuTab.removeClass("menu-keep");
+			$menuTab.removeClass("checked");
 		}
 		
 		function changeTab(self, index) {
@@ -4296,6 +4423,10 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			
 				// 이벤트 설정
 				self.addEvent(this, [ "click", "contextmenu" ], function(e) {
+					if($(this).hasClass("disabled")) {
+						return false;
+					}
+
 					var text = $.trim($(this).text()),
                         value = $(this).val();
 
@@ -4303,21 +4434,17 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
                         if(i != activeIndex) {
                             var args = [ { index: i, text: text, value: value }, e ];
 
-                            if(e.type == "click") {
-                                if(self.options.target != "") {
-                                    showTarget(self.options.target, this);
-                                }
+							if(self.options.target != "") {
+								showTarget(self.options.target, this);
+							}
 
-                                // 엑티브 인덱스 변경
-                                activeIndex = i;
+							// 엑티브 인덱스 변경
+							activeIndex = i;
 
-                                self.emit("change", args);
-                                self.emit("click", args);
+							self.emit("change", args);
+							self.emit("click", args);
 
-                                changeTab(self, i);
-                            } else if(e.type == "contextmenu") {
-                                self.emit("rclick", args);
-                            }
+							changeTab(self, i);
                         }
 					} else {
 						self.emit("menu", [ { index: i, text: text }, e ]);
@@ -4393,11 +4520,12 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			var $list = $(self.root).children("li"),
 				$markupNode = $list.filter(".active"),
 				$indexNode = $list.eq(activeIndex),
-				$node = ($indexNode.size() == 1) ? $indexNode : $markupNode;
+				$node = ($markupNode.size() == 1) ? $markupNode : $indexNode;
 			
-			// 노드가 없을 경우, 맨 첫번째 노드를 활성화
-			if($node.size() == 0) {
+			// 노드가 없거나 disabled 상태일 때, 맨 첫번째 노드를 활성화
+			if($node.hasClass("disabled") || $node.size() == 0) {
 				$node = $list.eq(0);
+				activeIndex = 0;
 			}
 			
 			$anchor.appendTo($node);
@@ -4423,7 +4551,7 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			// 드롭다운 메뉴 
 			if(this.tpl.menu) {
 				var $menu = $(this.tpl.menu());
-				$menu.insertAfter($(self.root));
+				$("body").append($menu);
 				
 				ui_menu = dropdown($menu, {
 					event: {
@@ -4566,8 +4694,10 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 		this.show = function(index) {
             if(index == menuIndex || index == activeIndex) return;
 
+			var $target = $(this.root).children("li").eq(index);
+			if($target.hasClass("disabled")) return;
+
 			activeIndex = index;
-            var $target = $(this.root).children("li").eq(index);
 
 			this.emit("change", [{ 
 				index: index, 
@@ -4576,6 +4706,32 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			}]);
 
 			changeTab(this, index);
+		}
+
+		/**
+		 * @method enable
+		 * Enables the tab at a specified index
+		 *
+		 * @param {Integer} index
+		 */
+		this.enable = function(index) {
+			if(index == menuIndex || index == activeIndex) return;
+
+			var $target = $(this.root).children("li").eq(index);
+			$target.removeClass("disabled");
+		}
+
+		/**
+		 * @method disable
+		 * Disables the tab at a specified index
+		 *
+		 * @param {Integer} index
+		 */
+		this.disable = function(index) {
+			if(index == menuIndex || index == activeIndex) return;
+
+			var $target = $(this.root).children("li").eq(index);
+			$target.addClass("disabled");
 		}
 
         /**
@@ -4628,14 +4784,6 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
     /**
      * @event click
      * Event that occurs when a tab is mouse clicked
-     *
-     * @param {Object} data changed data
-     * @param {EventObject} e The event object
-     */
-
-    /**
-     * @event rclick
-     * Event that occurs when a tab is mouse right clicked
      *
      * @param {Object} data changed data
      * @param {EventObject} e The event object
@@ -5225,6 +5373,8 @@ jui.defineUI("ui.tree", [ "util.base", "ui.tree.base" ], function(_, Base) {
 					});
 					
 					self.addEvent($elem.children("a,span,div")[0], "click", function(e) {
+                        if($elem.hasClass("disabled") || $elem.attr("disabled")) return;
+
 						self.emit("select", [ node, e ]);
 						e.stopPropagation();
 					});

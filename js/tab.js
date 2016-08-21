@@ -23,7 +23,7 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 		function showMenu(self, elem) {
 			var pos = $(elem).offset();
 			
-			$(elem).parent().addClass("menu-keep");
+			$(elem).addClass("checked");
 			ui_menu.show(pos.left, pos.top + $(self.root).height());
 		}
 		
@@ -31,7 +31,7 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			var $list = $(self.root).children("li"),
 				$menuTab = $list.eq(menuIndex);
 			
-			$menuTab.removeClass("menu-keep");
+			$menuTab.removeClass("checked");
 		}
 		
 		function changeTab(self, index) {
@@ -67,6 +67,10 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			
 				// 이벤트 설정
 				self.addEvent(this, [ "click", "contextmenu" ], function(e) {
+					if($(this).hasClass("disabled")) {
+						return false;
+					}
+
 					var text = $.trim($(this).text()),
                         value = $(this).val();
 
@@ -74,21 +78,17 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
                         if(i != activeIndex) {
                             var args = [ { index: i, text: text, value: value }, e ];
 
-                            if(e.type == "click") {
-                                if(self.options.target != "") {
-                                    showTarget(self.options.target, this);
-                                }
+							if(self.options.target != "") {
+								showTarget(self.options.target, this);
+							}
 
-                                // 엑티브 인덱스 변경
-                                activeIndex = i;
+							// 엑티브 인덱스 변경
+							activeIndex = i;
 
-                                self.emit("change", args);
-                                self.emit("click", args);
+							self.emit("change", args);
+							self.emit("click", args);
 
-                                changeTab(self, i);
-                            } else if(e.type == "contextmenu") {
-                                self.emit("rclick", args);
-                            }
+							changeTab(self, i);
                         }
 					} else {
 						self.emit("menu", [ { index: i, text: text }, e ]);
@@ -164,11 +164,12 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			var $list = $(self.root).children("li"),
 				$markupNode = $list.filter(".active"),
 				$indexNode = $list.eq(activeIndex),
-				$node = ($indexNode.size() == 1) ? $indexNode : $markupNode;
+				$node = ($markupNode.size() == 1) ? $markupNode : $indexNode;
 			
-			// 노드가 없을 경우, 맨 첫번째 노드를 활성화
-			if($node.size() == 0) {
+			// 노드가 없거나 disabled 상태일 때, 맨 첫번째 노드를 활성화
+			if($node.hasClass("disabled") || $node.size() == 0) {
 				$node = $list.eq(0);
+				activeIndex = 0;
 			}
 			
 			$anchor.appendTo($node);
@@ -194,7 +195,7 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			// 드롭다운 메뉴 
 			if(this.tpl.menu) {
 				var $menu = $(this.tpl.menu());
-				$menu.insertAfter($(self.root));
+				$("body").append($menu);
 				
 				ui_menu = dropdown($menu, {
 					event: {
@@ -337,8 +338,10 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 		this.show = function(index) {
             if(index == menuIndex || index == activeIndex) return;
 
+			var $target = $(this.root).children("li").eq(index);
+			if($target.hasClass("disabled")) return;
+
 			activeIndex = index;
-            var $target = $(this.root).children("li").eq(index);
 
 			this.emit("change", [{ 
 				index: index, 
@@ -347,6 +350,32 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
 			}]);
 
 			changeTab(this, index);
+		}
+
+		/**
+		 * @method enable
+		 * Enables the tab at a specified index
+		 *
+		 * @param {Integer} index
+		 */
+		this.enable = function(index) {
+			if(index == menuIndex || index == activeIndex) return;
+
+			var $target = $(this.root).children("li").eq(index);
+			$target.removeClass("disabled");
+		}
+
+		/**
+		 * @method disable
+		 * Disables the tab at a specified index
+		 *
+		 * @param {Integer} index
+		 */
+		this.disable = function(index) {
+			if(index == menuIndex || index == activeIndex) return;
+
+			var $target = $(this.root).children("li").eq(index);
+			$target.addClass("disabled");
 		}
 
         /**
@@ -399,14 +428,6 @@ jui.defineUI("ui.tab", [ "jquery", "util.base", "ui.dropdown" ], function($, _, 
     /**
      * @event click
      * Event that occurs when a tab is mouse clicked
-     *
-     * @param {Object} data changed data
-     * @param {EventObject} e The event object
-     */
-
-    /**
-     * @event rclick
-     * Event that occurs when a tab is mouse right clicked
      *
      * @param {Object} data changed data
      * @param {EventObject} e The event object
